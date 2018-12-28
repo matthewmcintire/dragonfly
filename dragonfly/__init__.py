@@ -52,7 +52,8 @@ from .actions           import (ActionBase, DynStrActionBase, ActionError,
                                 Function, StartApp, BringApp, PlaySound,
                                 Typeable, Keyboard, typeables,
                                 KeyboardInput, MouseInput, HardwareInput,
-                                make_input_array, send_input_array
+                                make_input_array, send_input_array,
+                                RunCommand
                                 )
 
 #---------------------------------------------------------------------------
@@ -70,3 +71,8 @@ from .windows           import Monitor, monitors
 from .language          import (Integer, IntegerRef,
                                 Digits, DigitsRef,
                                 Number, NumberRef)
+
+#---------------------------------------------------------------------------
+from .accessibility     import (CursorPosition, TextQuery,
+                                get_accessibility_controller,
+                                get_stopping_accessibility_controller)

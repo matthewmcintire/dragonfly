@@ -2,6 +2,7 @@ Dragonfly
 =========
 
 |Build Status|
+|Docs Status|
 
 Dragonfly is a speech recognition framework. It is a Python package
 which offers a high-level object model and allows its users to easily
@@ -15,8 +16,10 @@ It currently supports the following speech recognition engines:
 -  *CMU Pocket Sphinx* (with caveats)
 
 Dragonfly's documentation is available online at `Read the
-Docs <http://dragonfly2.readthedocs.org/en/latest/>`__. Dragonfly's FAQ
-is available at
+Docs <http://dragonfly2.readthedocs.org/en/latest/>`__. The changes in
+each release are listed in the project's `changelog
+<https://github.com/Danesprite/dragonfly/blob/master/CHANGELOG.rst>`__.
+Dragonfly's FAQ is available at
 `Stackoverflow <http://stackoverflow.com/questions/tagged/python-dragonfly>`__.
 Dragonfly's mailing list/discussion group is available at `Google
 Groups <https://groups.google.com/forum/#!forum/dragonflyspeech>`__.
@@ -37,7 +40,10 @@ pip:
 
 The distribution name has been changed to *dragonfly2* in order to
 upload releases to PyPI.org, but everything can still be imported using
-*dragonfly*.
+*dragonfly*. If you use any grammar modules that include something like
+:code:`pkg_resources.require("dragonfly >= 0.6.5")`, you will need to either
+replace :code:`dragonfly` with :code:`dragonfly2` or remove lines like this
+altogether.
 
 If you have dragonfly installed under the original *dragonfly*
 distribution name, you'll need to remove the old version using:
@@ -107,7 +113,7 @@ This is done as follows:
 
 .. code-block:: python
 
-    from dragonfly.all import Grammar, CompoundRule
+    from dragonfly import Grammar, CompoundRule
 
     # Voice command rule combining spoken form and recognition processing.
     class ExampleRule(CompoundRule):
@@ -147,5 +153,7 @@ compared to Dragonfly as follows:
 
 .. |Build Status| image:: https://travis-ci.org/Danesprite/dragonfly.svg?branch=master
    :target: https://travis-ci.org/Danesprite/dragonfly
+.. |Docs Status| image:: https://readthedocs.org/projects/dragonfly2/badge/?version=latest&style=flat
+   :target: https://dragonfly2.readthedocs.io
 .. |Join the chat at https://gitter.im/sphinx-dragonfly| image:: https://badges.gitter.im/Join%20Chat.svg
    :target: https://gitter.im/sphinx-dragonfly
