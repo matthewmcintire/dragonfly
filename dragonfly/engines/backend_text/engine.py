@@ -18,18 +18,20 @@
 #   <http://www.gnu.org/licenses/>.
 #
 
-from six import string_types, text_type
+from six import string_types, text_type, PY2
 
 import dragonfly.grammar.state as state_
 from dragonfly import Window
 
 from .dictation import TextDictationContainer
 from .recobs import TextRecobsManager
-from ..base import EngineBase, EngineError, MimicFailure
+from ..base import (EngineBase, EngineError, MimicFailure,
+                    ThreadedTimerManager)
 
 
 def _map_word(word):
-    word = text_type(word)
+    if PY2 and isinstance(word, str):
+        word = text_type(word, encoding="utf-8")
     if word.isupper():
         # Convert dictation words to lowercase for consistent output.
         return word.lower(), 1000000
@@ -49,6 +51,7 @@ class TextInputEngine(EngineBase):
         EngineBase.__init__(self)
         self._language = "en"
         self._recognition_observer_manager = TextRecobsManager(self)
+        self._timer_manager = ThreadedTimerManager(0.02, self)
 
     def connect(self):
         pass
@@ -56,6 +59,20 @@ class TextInputEngine(EngineBase):
     def disconnect(self):
         # Clear grammar wrappers on disconnect()
         self._grammar_wrappers.clear()
+
+    # -----------------------------------------------------------------------
+    # Methods for administrating timers.
+
+    def create_timer(self, callback, interval):
+        """
+        Create and return a timer using the specified callback and repeat
+        interval.
+
+        Timers created using this engine will be run in a separate daemon
+        thread, meaning that their callbacks will **not** be thread safe.
+        :meth:`threading.Timer` may be used instead with no blocking issues.
+        """
+        return EngineBase.create_timer(self, callback, interval)
 
     # -----------------------------------------------------------------------
     # Methods for working with grammars.
@@ -150,7 +167,7 @@ class TextInputEngine(EngineBase):
             if processing_occurred:
                 # Notify observers of the recognition.
                 self._recognition_observer_manager.notify_recognition(
-                    [word for word, _ in words_rules]
+                    tuple([word for word, _ in words_rules])
                 )
                 break
 

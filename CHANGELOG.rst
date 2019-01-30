@@ -12,12 +12,67 @@ Note: this project had no release versions between 0.6.6b1_ and
 commit history and will be placed under headings in this file over time.
 
 
+0.11.0_ - 2019-01-30
+--------------------
+
+Added
+~~~~~
+* Add additional tests to dragonfly's test suites.
+* Add documentation for dragonfly's timer classes.
+* Add new synchronous and process properties and error handling to
+  the RunCommand action.
+* Add timer manager class for the text input and SAPI 5 engines.
+
+Changed
+~~~~~~~
+* Change default engine class for SAPI 5 engine backend to
+  Sapi5InProcEngine.
+* Change logging framework to use *~/.dragonfly.log* as the log
+  file to make logging work on Windows and on other operating
+  systems.
+* Change the Natlink test suite to run different tests for
+  different DNS versions.
+* Change the default test suite to the "text" engine's test suite
+  and add it to the CI build.
+* Change typeables.py so that all symbols can be referred to by
+  their printable representation (thanks `@wolfmanstout`_).
+* Make several changes to the SAPI 5 engine backend so it passes
+  the relevant dragonfly tests.
+* Update how _generate_typeables.py generates code used in
+  typeables.py.
+* Update several documentation pages.
+* Use a RecognitionObserver in dfly-loader-wsr.py for user feedback
+  when using Sapi5InProcEngine.
+
+Fixed
+~~~~~
+* Add default implementation for the RunCommand.process_command
+  method so that most commands don't hang without an implementation.
+* Fix bug where the Text action intermittently ignores the
+  hardware_apps override (thanks `@wolfmanstout`_).
+* Fix some encoding bugs with the text input engine.
+* Fix various issues with dragonfly's tests and test framework.
+
+Removed
+~~~~~~~
+* Remove old test files.
+
+0.10.1_ - 2019-01-06
+--------------------
+
+Fixed
+~~~~~
+* Disable **backwards-incompatible** Unicode keyboard functionality by
+  default for the Text action. Restoring the old behaviour
+  requires deleting/modifying the `~/.dragonfly2-speech/settings.cfg`
+  file.
+
 0.10.0_ - 2018-12-28
 --------------------
 
 Added
 ~~~~~
-* Add configurable Windows Unicode keyboard support to the :class:`Text`
+* Add configurable Windows Unicode keyboard support to the Text
   action (thanks `@Versatilus`_).
 * Add Windows accessibility API support to Dragonfly (thanks
   `@wolfmanstout`_).
@@ -29,6 +84,8 @@ Changed
 ~~~~~~~
 * Change default paste key for the Paste action to Shift+insert.
 * Change typeables.py to log errors for untypeable characters.
+* Make **backwards-incompatible** change to the Text class where
+  it no longer respects modifier keys being held down by default.
 * Move TestContext class from Pocket Sphinx engine tests into
   test/infrastructure.py.
 * Move command module classes from loader scripts into
@@ -215,19 +272,21 @@ This release is the first in the Git version control system.
 
 
 .. Release links.
-.. _Unreleased:  https://github.com/Danesprite/dragonfly/compare/0.10.0...HEAD
-.. _0.10.0:      https://github.com/Danesprite/dragonfly/compare/0.9.1...0.10.0
-.. _0.9.1:       https://github.com/Danesprite/dragonfly/compare/0.9.0...0.9.1
-.. _0.9.0:       https://github.com/Danesprite/dragonfly/compare/0.8.0...0.9.0
-.. _0.8.0:       https://github.com/Danesprite/dragonfly/compare/0.7.0...0.8.0
-.. _0.7.0:       https://github.com/Danesprite/dragonfly/compare/74981c1...0.7.0
-.. _0.6.6b1:     https://github.com/Danesprite/dragonfly/compare/0.6.5...0.6.6b1
-.. _0.6.5:       https://github.com/Danesprite/dragonfly/compare/0.6.4-rc3...0.6.5
-.. _0.6.4:       https://github.com/Danesprite/dragonfly/compare/0.6.4-rc3...0.6.4
-.. _0.6.4-rc3:   https://github.com/Danesprite/dragonfly/compare/0.6.4-rc2...0.6.4-rc3
-.. _0.6.4-rc2:   https://github.com/Danesprite/dragonfly/compare/0.6.4-rc1...0.6.4-rc2
-.. _0.6.4-rc1:   https://github.com/Danesprite/dragonfly/compare/0.6.1...0.6.4-rc1
-.. _0.6.1:       https://github.com/Danesprite/dragonfly/compare/03d06af...0.6.1
+.. _Unreleased:  https://github.com/dictation-toolbox/dragonfly/compare/0.11.0...HEAD
+.. _0.11.0:      https://github.com/dictation-toolbox/dragonfly/compare/0.10.1...0.11.0
+.. _0.10.1:      https://github.com/dictation-toolbox/dragonfly/compare/0.10.0...0.10.1
+.. _0.10.0:      https://github.com/dictation-toolbox/dragonfly/compare/0.9.1...0.10.0
+.. _0.9.1:       https://github.com/dictation-toolbox/dragonfly/compare/0.9.0...0.9.1
+.. _0.9.0:       https://github.com/dictation-toolbox/dragonfly/compare/0.8.0...0.9.0
+.. _0.8.0:       https://github.com/dictation-toolbox/dragonfly/compare/0.7.0...0.8.0
+.. _0.7.0:       https://github.com/dictation-toolbox/dragonfly/compare/74981c1...0.7.0
+.. _0.6.6b1:     https://github.com/dictation-toolbox/dragonfly/compare/0.6.5...0.6.6b1
+.. _0.6.5:       https://github.com/dictation-toolbox/dragonfly/compare/0.6.4-rc3...0.6.5
+.. _0.6.4:       https://github.com/dictation-toolbox/dragonfly/compare/0.6.4-rc3...0.6.4
+.. _0.6.4-rc3:   https://github.com/dictation-toolbox/dragonfly/compare/0.6.4-rc2...0.6.4-rc3
+.. _0.6.4-rc2:   https://github.com/dictation-toolbox/dragonfly/compare/0.6.4-rc1...0.6.4-rc2
+.. _0.6.4-rc1:   https://github.com/dictation-toolbox/dragonfly/compare/0.6.1...0.6.4-rc1
+.. _0.6.1:       https://github.com/dictation-toolbox/dragonfly/compare/03d06af...0.6.1
 
 .. Other links.
 .. _Keep a Changelog: https://keepachangelog.com/en/1.0.0/
