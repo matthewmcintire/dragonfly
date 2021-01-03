@@ -18,7 +18,10 @@
 #   <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import print_function
 import sys
+
+print("Using Python %s and Dragonfly from %s" % (sys.version, __file__))
 
 # --------------------------------------------------------------------------
 from .config            import Config, Section, Item
