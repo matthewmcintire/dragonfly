@@ -73,7 +73,6 @@ class KaldiCompiler(CompilerBase, KaldiAGCompiler):
         self.lazy_compilation = bool(lazy_compilation)
 
         self.kaldi_rule_by_rule_dict = collections.OrderedDict()  # Rule -> KaldiRule
-        # self._grammar_rule_states_dict = dict()  # FIXME: disabled!
         self.kaldi_rules_by_listreflist_dict = collections.defaultdict(set)  # Rule -> Set[KaldiRule]
         self.internal_grammar = InternalGrammar('!kaldi_engine_internal')
 
@@ -132,41 +131,34 @@ class KaldiCompiler(CompilerBase, KaldiAGCompiler):
 
     def compile_grammar(self, grammar, engine):
         self._log.debug("%s: Compiling grammar %s." % (self, grammar.name))
-
         kaldi_rule_by_rule_dict = collections.OrderedDict()  # Rule -> KaldiRule
+
         for rule in grammar.rules:
             if rule.exported:
-                if rule.element is None:
-                    # We cannot deal with an empty rule (could be fixed by refactoring)
-                    raise CompilerError("Invalid None element for %s in %s" % (rule, grammar))
-
-                kaldi_rule = KaldiRule(self,
-                    name='%s::%s' % (grammar.name, rule.name),
-                    has_dictation=None)  # has_dictation is set to True during compilation below if that is the case
-                kaldi_rule.parent_grammar = grammar
-                kaldi_rule.parent_rule = rule
+                kaldi_rule = self._compile_kaldi_rule(rule, grammar)
                 kaldi_rule_by_rule_dict[rule] = kaldi_rule
 
-                try:
-                    self._compile_rule_root(rule, grammar, kaldi_rule)
-                    kaldi_rule.has_dictation = bool(kaldi_rule.has_dictation)  # Convert None to False
-                except Exception:
-                    raise self.make_compiler_error_for_kaldi_rule(kaldi_rule)
-
-        self.kaldi_rule_by_rule_dict.update(kaldi_rule_by_rule_dict)
         return kaldi_rule_by_rule_dict
 
-    def _compile_rule_root(self, rule, grammar, kaldi_rule):
-        self._compile_rule(rule, grammar, kaldi_rule, kaldi_rule.fst, export=True)
-        kaldi_rule.compile(lazy=self.lazy_compilation)
+    def _compile_kaldi_rule(self, rule, grammar):
+        kaldi_rule = KaldiRule(self,
+            name='%s::%s' % (grammar.name, rule.name),
+            has_dictation=None)  # has_dictation is set to True during compilation below if that is the case
+        kaldi_rule.parent_grammar = grammar
+        kaldi_rule.parent_rule = rule
+
+        try:
+            self._compile_rule(rule, grammar, kaldi_rule, kaldi_rule.fst, export=rule.exported)
+            kaldi_rule.has_dictation = bool(kaldi_rule.has_dictation)  # Convert None to False
+            kaldi_rule.compile(lazy=self.lazy_compilation)
+        except Exception:
+            raise self.make_compiler_error_for_kaldi_rule(kaldi_rule)
+
+        self.kaldi_rule_by_rule_dict[rule] = kaldi_rule
+        return kaldi_rule
 
     def _compile_rule(self, rule, grammar, kaldi_rule, fst, export):
         """ :param export: whether rule is exported (a root rule) """
-        # Determine whether this rule has already been compiled.
-        # if (grammar.name, rule.name) in self._grammar_rule_states_dict:
-        #     self._log.debug("%s: Already compiled rule %s%s." % (self, rule.name, ' [EXPORTED]' if export else ''))
-        #     return self._grammar_rule_states_dict[(grammar.name, rule.name)]
-        # else:
         self._log.debug("%s: Compiling rule %s%s." % (self, rule.name, ' [EXPORTED]' if export else ''))
 
         if export:
@@ -186,7 +178,6 @@ class KaldiCompiler(CompilerBase, KaldiAGCompiler):
             dst_state = fst.add_state()
 
         self.compile_element(rule.element, inner_src_state, dst_state, grammar, kaldi_rule, fst)
-        # self._grammar_rule_states_dict[(grammar.name, rule.name)] = (src_state, dst_state)
         return (outer_src_state, dst_state)
 
     def unload_grammar(self, grammar, rules, engine):
@@ -204,7 +195,7 @@ class KaldiCompiler(CompilerBase, KaldiAGCompiler):
         lst_kaldi_rules = self.kaldi_rules_by_listreflist_dict[id(lst)]
         for kaldi_rule in lst_kaldi_rules:
             with kaldi_rule.reload():
-                self._compile_rule_root(kaldi_rule.parent_rule, grammar, kaldi_rule)
+                self._compile_kaldi_rule(kaldi_rule.parent_rule, grammar, kaldi_rule)
 
     #-----------------------------------------------------------------------
     # Methods for compiling elements.
