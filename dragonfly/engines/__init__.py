@@ -103,6 +103,20 @@ def get_engine(name=None, **kwargs):
             if name:
                 raise EngineError(message)
 
+    if not name or name == "sapi5_daanzu":
+        # Attempt to retrieve the daanzu sapi5 back-end.
+        try:
+            from .backend_sapi5_daanzu import is_engine_available
+            from .backend_sapi5_daanzu import get_engine as get_specific_engine
+            if is_engine_available(**kwargs):
+                return get_specific_engine(**kwargs)
+        except Exception as e:
+            message = ("Exception while initializing sapi5_daanzu engine:"
+                       " %s" % (e,))
+            log.exception(message)
+            if name:
+                raise EngineError(message)
+
     if not name or name == "sphinx":
         # Attempt to retrieve the CMU Sphinx back-end.
         try:
