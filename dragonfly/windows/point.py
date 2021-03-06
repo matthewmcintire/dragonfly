@@ -111,6 +111,13 @@ class Point(object):
         clone -= other
         return clone
 
+    def replace(self, x=None, y=None):
+        if x is not None:
+            self.x = x
+        if y is not None:
+            self.y = y
+        return self 
+
     def translate(self, dx, dy):
         """camp point."""
         # pylint: disable=R0201
