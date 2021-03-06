@@ -43,7 +43,7 @@ int_1_9         = MapIntBuilder({
                                  "six":                 6,
                                  "seven":               7,
                                  "eight":               8,
-                                 "nine":                9,
+                                 "(nine | niner)":      9,
                                })
 int_10_19       = MapIntBuilder({
                                  "ten":       10,
