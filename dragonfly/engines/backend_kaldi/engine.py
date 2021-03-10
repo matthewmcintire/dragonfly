@@ -22,16 +22,16 @@
 Kaldi engine classes
 """
 
-import collections, functools, logging, os, sys, time
+import collections, logging, os, sys, time
 
 from packaging.version import Version
-from six import PY2, integer_types, string_types, print_, reraise
+from six import string_types, print_, reraise
 from six.moves import zip
 import kaldi_active_grammar
-from kaldi_active_grammar       import KaldiAgfNNet3Decoder, KaldiError, KaldiRule
+from kaldi_active_grammar       import KaldiError, KaldiRule
 
 from ..base                     import (EngineBase,
-                                        EngineError, CompilerError,
+                                        EngineError,
                                         MimicFailure,
                                         DelegateTimerManager,
                                         DelegateTimerManagerInterface,
@@ -72,8 +72,8 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
         vad_aggressiveness=3, vad_padding_start_ms=150, vad_padding_end_ms=200, vad_complex_padding_end_ms=600,
         auto_add_to_user_lexicon=True, lazy_compilation=True, invalidate_cache=False,
         expected_error_rate_threshold=None,
-        alternative_dictation=None, cloud_dictation_lang='en-US',
-        decoder_init_config=None,
+        alternative_dictation=None,
+        compiler_init_config=None, decoder_init_config=None,
         ):
         EngineBase.__init__(self)
         DelegateTimerManagerInterface.__init__(self)
@@ -140,8 +140,8 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
             invalidate_cache = bool(invalidate_cache),
             expected_error_rate_threshold = float(expected_error_rate_threshold) if expected_error_rate_threshold is not None else None,
             alternative_dictation = alternative_dictation,
-            cloud_dictation_lang = cloud_dictation_lang,
-            decoder_init_config = dict(decoder_init_config) if decoder_init_config else None,
+            compiler_init_config = dict(compiler_init_config) if compiler_init_config else {},
+            decoder_init_config = dict(decoder_init_config) if decoder_init_config else {},
         )
 
         # Setup
@@ -156,6 +156,8 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
         self._audio_iter = None
         self.audio_store = None
 
+        self._loadunload_queue = collections.deque()
+        self._grammar_wrappers_copy = {}
         self._any_exclusive_grammars = False
         self._saving_adaptation_state = False
         self._ignore_current_phrase = False
@@ -176,17 +178,12 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
             auto_add_to_user_lexicon=self._options['auto_add_to_user_lexicon'],
             lazy_compilation=self._options['lazy_compilation'],
             alternative_dictation=self._options['alternative_dictation'],
-            cloud_dictation_lang=self._options['cloud_dictation_lang'],
+            **self._options['compiler_init_config'],
             )
         if self._options['invalidate_cache']:
             self._compiler.fst_cache.invalidate()
 
-        top_fst = self._compiler.compile_top_fst()
-        dictation_fst_file = self._compiler.dictation_fst_filepath
-        self._decoder = KaldiAgfNNet3Decoder(model_dir=self._compiler.model_dir, tmp_dir=self._compiler.tmp_dir,
-            top_fst_file=top_fst.filepath, dictation_fst_file=dictation_fst_file, save_adaptation_state=False,
-            config=self._options['decoder_init_config'],)
-        self._compiler.decoder = self._decoder
+        self._decoder = self._compiler.init_decoder(config=self._options['decoder_init_config'])
 
         if self._options['audio_input_device'] is not False:
             self._audio = VADAudio(
@@ -218,7 +215,8 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
             self._reset_state()
             self._grammar_wrappers = {}  # From EngineBase
 
-    def print_mic_list(self):
+    @staticmethod
+    def print_mic_list():
         MicAudio.print_list()
 
     #-----------------------------------------------------------------------
@@ -226,24 +224,35 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
 
     def _load_grammar(self, grammar):
         """ Load the given *grammar*. """
-        self._log.info("Loading grammar %s" % grammar.name)
         if not self._decoder:
             self.connect()
 
+        self._log.info("Loading grammar %s" % grammar.name)
         kaldi_rule_by_rule_dict = self._compiler.compile_grammar(grammar, self)
         wrapper = GrammarWrapper(grammar, kaldi_rule_by_rule_dict, self,
                                  self._recognition_observer_manager)
-        for (rule, kaldi_rule) in kaldi_rule_by_rule_dict.items():
-            kaldi_rule.active = bool(rule.active)  # Initialize to correct activity
-            kaldi_rule.load(lazy=self._compiler.lazy_compilation)
+
+        def load():
+            for (rule, kaldi_rule) in kaldi_rule_by_rule_dict.items():
+                kaldi_rule.active = bool(rule.active)  # Initialize to correct activity
+                kaldi_rule.load(lazy=self._compiler.lazy_compilation)
+        if self._in_phrase:
+            self._loadunload_queue.append(load)
+        else:
+            load()
 
         return wrapper
 
     def _unload_grammar(self, grammar, wrapper):
         """ Unload the given *grammar*. """
         self._log.debug("Unloading grammar %s." % grammar.name)
-        rules = list(wrapper.kaldi_rule_by_rule_dict.keys())
-        self._compiler.unload_grammar(grammar, rules, self)
+        def unload():
+            rules = list(wrapper.kaldi_rule_by_rule_dict.keys())
+            self._compiler.unload_grammar(grammar, rules, self)
+        if self._in_phrase:
+            self._loadunload_queue.append(unload)
+        else:
+            unload()
 
     def activate_grammar(self, grammar):
         """ Activate the given *grammar*. """
@@ -293,9 +302,12 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
 
         recognition = self._parse_recognition(output, mimic=True)
         if not recognition.kaldi_rule:
+            recognition.fail(mimic=True)
             raise MimicFailure("No matching rule found for %r." % (output,))
-        recognition.process()
+        recognition.process(mimic=True)
         self._log.debug("End of mimic: rule %s, %r" % (recognition.kaldi_rule, output))
+        if not self._log.isEnabledFor(10):
+            self._log.log(15, "End of mimic: rule %s, %r" % (recognition.kaldi_rule, output))
 
     def speak(self, text):
         """ Speak the given *text* using text-to-speech. """
@@ -311,7 +323,13 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
 
     def prepare_for_recognition(self):
         """ Can be called optionally before ``do_recognition()`` to speed up its starting of active recognition. """
+        if self._in_phrase:
+            self._log.warning("prepare_for_recognition ignored while in phrase; will be run after")
+            return
         try:
+            while self._loadunload_queue:
+                operation = self._loadunload_queue.popleft()
+                operation()
             self._compiler.prepare_for_recognition()
         except KaldiError as e:
             if len(e.args) >= 2 and isinstance(e.args[1], KaldiRule):
@@ -337,7 +355,7 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
         timed_out = False
 
         try:
-            self.prepare_for_recognition()
+            self.prepare_for_recognition()  # Try to get compilation out of the way before starting audio
 
             if timeout != None:
                 end_time = time.time() + timeout
@@ -351,7 +369,6 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
 
             # Loop until timeout (if set) or until disconnect() is called.
             while (not self._deferred_disconnect) and ((not end_time) or (time.time() < end_time)):
-                self.prepare_for_recognition()
                 block = audio_iter.send(in_complex)
 
                 if block is False:
@@ -366,6 +383,7 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
                             kaldi_rules_activity = self._compute_kaldi_rules_activity()
                         self._in_phrase = True
                         self._ignore_current_phrase = False
+                        self._grammar_wrappers_copy = self._grammar_wrappers.copy()  # Keep a copy of valid grammar wrappers as of the start of utterance
 
                     else:
                         # Ongoing phrase
@@ -414,6 +432,7 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
                     timed_out = False
                     if single:
                         break
+                    self.prepare_for_recognition()  # Do any of this leftover, now that phrase is done
 
                 self.call_timer_callback()
 
@@ -518,6 +537,7 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
             todo_grammar_wrappers = set(self._grammar_wrappers.values()) - processed_grammar_wrappers
 
     def _compute_kaldi_rules_activity(self, phrase_start=True):
+        window_info = {}
         if phrase_start:
             fg_window = Window.get_foreground()
             window_info = {
@@ -536,7 +556,7 @@ class KaldiEngine(EngineBase, DelegateTimerManagerInterface):
                     if kaldi_rule.active:
                         self._active_kaldi_rules.add(kaldi_rule)
                         self._kaldi_rules_activity[kaldi_rule.id] = True
-        self._log.debug("active kaldi_rules: %s", [kr.name for kr in self._active_kaldi_rules])
+        self._log.debug("active kaldi_rules (from window %s): %s", window_info, [kr.name for kr in self._active_kaldi_rules])
         return self._kaldi_rules_activity
 
     def _parse_recognition(self, output, mimic=False):
@@ -631,19 +651,22 @@ class Recognition(object):
     #         self.engine._log.warning("%s not finalized!", self)
     #     # Note: this can be generated spurriously upon exit or testing
 
-    def process(self, expected_error_rate=None, confidence=None):
+    def process(self, expected_error_rate=None, confidence=None, mimic=False):
         if expected_error_rate is not None: self.expected_error_rate = expected_error_rate
         if confidence is not None: self.confidence = confidence
+        self.mimic = mimic
         self.acceptable = True
         assert self.words
-        grammar_wrapper = self.engine._get_grammar_wrapper(self.kaldi_rule.parent_grammar)
+        grammar_wrappers = self.engine._grammar_wrappers if mimic else self.engine._grammar_wrappers_copy
+        grammar_wrapper = grammar_wrappers[id(self.kaldi_rule.parent_grammar)]
         with debug_timer(self.engine._log.debug, "dragonfly parse time"):
             grammar_wrapper.recognition_callback(self)
         self.finalized = True
 
-    def fail(self, expected_error_rate=None, confidence=None):
+    def fail(self, expected_error_rate=None, confidence=None, mimic=False):
         if expected_error_rate is not None: self.expected_error_rate = expected_error_rate
         if confidence is not None: self.confidence = confidence
+        self.mimic = mimic
         self.acceptable = False
         self.engine._recognition_observer_manager.notify_failure(results=self)
         self.finalized = True
