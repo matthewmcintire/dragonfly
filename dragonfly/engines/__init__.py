@@ -50,8 +50,9 @@ def get_engine(name=None, **kwargs):
          =======================   =========================================
          1. Dragon/Natlink         ``"natlink"``
          2. Kaldi                  ``"kaldi"``
-         3. WSR/SAPI 5             ``"sapi5", "sapi5inproc", "sapi5shared"``
-         4. CMU Pocket Sphinx      ``"sphinx"``
+         3. Wenet                  ``"wenet"``
+         4. WSR/SAPI 5             ``"sapi5", "sapi5inproc", "sapi5shared"``
+         5. CMU Pocket Sphinx      ``"sphinx"``
          =======================   =========================================
 
         The :ref:`Text-input engine <RefTextEngine>` can be initialized by
@@ -129,6 +130,20 @@ def get_engine(name=None, **kwargs):
             if name:
                 raise EngineError(message)
 
+    if not engine and name in (None, "wenet"):
+        # Attempt to retrieve the Wenet back-end.
+        try:
+            from .backend_wenet import is_engine_available
+            from .backend_wenet import get_engine as get_specific_engine
+            if is_engine_available(**kwargs):
+                engine = get_specific_engine(**kwargs)
+        except Exception as e:
+            message = ("Exception while initializing wenet engine:"
+                       " %s" % (e,))
+            log.warning(message)
+            if name:
+                raise EngineError(message)
+
     sapi5_names = (None, "sapi5shared", "sapi5inproc", "sapi5")
     if not engine and windows and name in sapi5_names:
         # Attempt to retrieve the sapi5 back-end.
@@ -184,7 +199,7 @@ def get_engine(name=None, **kwargs):
     elif not name:
         raise EngineError("No usable engines found.")
     else:
-        valid_names = ["natlink", "kaldi", "sphinx", "sapi5shared",
+        valid_names = ["natlink", "kaldi", "wenet", "sphinx", "sapi5shared",
                        "sapi5inproc", "sapi5", "text"]
         if name not in valid_names:
             raise EngineError("Requested engine %r is not a valid engine "
