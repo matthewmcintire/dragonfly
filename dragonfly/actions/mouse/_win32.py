@@ -49,9 +49,24 @@ def get_cursor_position():
         return None
 
 
-def set_cursor_position(x, y):
-    result = windll.user32.SetCursorPos(c_long(int(x)), c_long(int(y)))
-    return not result
+def set_cursor_position(x, y, compatible=True):
+    if compatible:
+        # Convert to SendInput coordinates.
+        display_width = windll.user32.GetSystemMetrics(win32con.SM_CXSCREEN)
+        display_height = windll.user32.GetSystemMetrics(win32con.SM_CYSCREEN)
+        x = (x * 65536) // display_width + 1
+        y = (y * 65536) // display_height + 1
+
+        # Prepare and send the mouse events.
+        zero = pointer(c_ulong(0))
+        move_flags = win32con.MOUSEEVENTF_MOVE | win32con.MOUSEEVENTF_ABSOLUTE
+        inputs = [MouseInput(int(x), int(y), 0, move_flags, 0, zero)]
+        array = make_input_array(inputs)
+        send_input_array(array)
+
+    else:
+        result = windll.user32.SetCursorPos(c_long(int(x)), c_long(int(y)))
+        return not result
 
 
 class MoveEventDelegate(object):
