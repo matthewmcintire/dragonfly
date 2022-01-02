@@ -67,12 +67,11 @@ class WenetEngine(EngineBase, DelegateTimerManagerInterface):
 
     #-----------------------------------------------------------------------
 
-    def __init__(self, model_dir=None, tmp_dir=None, input_device_index=None,
+    def __init__(self, model_dir=None, input_device_index=None,
         audio_input_device=None, audio_self_threaded=True, audio_auto_reconnect=True, audio_reconnect_callback=None,
         retain_dir=None, retain_audio=None, retain_metadata=None, retain_approval_func=None,
         vad_aggressiveness=3, vad_padding_start_ms=150, vad_padding_end_ms=200, vad_complex_padding_end_ms=600,
         auto_add_to_user_lexicon=True, allow_online_pronunciations=False,
-        lazy_compilation=True, invalidate_cache=False,
         expected_error_rate_threshold=None,
         alternative_dictation=None,
         compiler_init_config=None, decoder_init_config=None,
@@ -116,7 +115,6 @@ class WenetEngine(EngineBase, DelegateTimerManagerInterface):
 
         self._options = dict(
             model_dir = model_dir,
-            tmp_dir = tmp_dir,
             audio_input_device = audio_input_device,
             audio_self_threaded = bool(audio_self_threaded),
             audio_auto_reconnect = bool(audio_auto_reconnect),
@@ -131,8 +129,6 @@ class WenetEngine(EngineBase, DelegateTimerManagerInterface):
             vad_complex_padding_end_ms = int(vad_complex_padding_end_ms),
             auto_add_to_user_lexicon = bool(auto_add_to_user_lexicon),
             allow_online_pronunciations = bool(allow_online_pronunciations),
-            lazy_compilation = bool(lazy_compilation),
-            invalidate_cache = bool(invalidate_cache),
             expected_error_rate_threshold = float(expected_error_rate_threshold) if expected_error_rate_threshold is not None else None,
             alternative_dictation = alternative_dictation,
             compiler_init_config = dict(compiler_init_config) if compiler_init_config else {},
@@ -169,15 +165,12 @@ class WenetEngine(EngineBase, DelegateTimerManagerInterface):
         self._log.info("Loading Wenet-Active-Grammar v%s in process %s." % (wenet_active_grammar.__version__, os.getpid()))
         self._log.info("Wenet options: %s" % self._options)
 
-        self._compiler = WenetCompiler(self._options['model_dir'], tmp_dir=self._options['tmp_dir'],
-            auto_add_to_user_lexicon=self._options['auto_add_to_user_lexicon'],
-            allow_online_pronunciations=self._options['allow_online_pronunciations'],
-            lazy_compilation=self._options['lazy_compilation'],
+        self._compiler = WenetCompiler(self._options['model_dir'],
             alternative_dictation=self._options['alternative_dictation'],
+            # auto_add_to_user_lexicon=self._options['auto_add_to_user_lexicon'],
+            # allow_online_pronunciations=self._options['allow_online_pronunciations'],
             **self._options['compiler_init_config']
             )
-        if self._options['invalidate_cache']:
-            self._compiler.fst_cache.invalidate()
 
         self._decoder = self._compiler.init_decoder(config=self._options['decoder_init_config'])
 
@@ -215,16 +208,6 @@ class WenetEngine(EngineBase, DelegateTimerManagerInterface):
     def print_mic_list():
         MicAudio.print_list()
 
-    def _apply_win32_kb_input_logging_fix(self):
-        # Hack to avoid bug processing keyboard actions on Windows
-        if os.name == 'nt':
-            action_exec_logger = logging.getLogger('action.exec')
-            if action_exec_logger.getEffectiveLevel() > logging.DEBUG:
-                self._log.warning("%s: Enabling logging of actions "
-                                  "execution to avoid bug processing "
-                                  "keyboard actions on Windows", self)
-                action_exec_logger.setLevel(logging.DEBUG)
-
     #-----------------------------------------------------------------------
     # Methods for working with grammars.
 
@@ -241,7 +224,7 @@ class WenetEngine(EngineBase, DelegateTimerManagerInterface):
         def load():
             for (rule, wenet_rule) in wenet_rule_by_rule_dict.items():
                 wenet_rule.active = bool(rule.active)  # Initialize to correct activity
-                wenet_rule.load(lazy=self._compiler.lazy_compilation)
+                wenet_rule.load()
         if self._in_phrase:
             self._loadunload_queue.append(load)
         else:
